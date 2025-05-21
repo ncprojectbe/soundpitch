@@ -29,81 +29,102 @@ function applyDisableScrollAttribute() {
     }
   });
   
- // ========== Haal conversaties op via API ==========
-(async () => {
-    const userId = JSON.parse(localStorage.getItem('_ms-mem'))?.id;
-    if (!userId) return console.error('❌ Geen user-id gevonden in localStorage (_ms-mem)');
-  
-    const inbox = document.querySelector('[inbox]');
-    if (!inbox) return console.error('❌ Element met attribuut [inbox] niet gevonden');
+ // ========= Mapping van types naar container-wrappers =========
+const typeToWrapper = {
+    conversations: '[inbox]',
+    messages: '[message]',
+    orders: '[orders]', // voorbeeld
+  };
 
+  // ========= Startpunt =========
+  (async () => {
+    const userId = JSON.parse(localStorage.getItem('_ms-mem'))?.id;
+    if (!userId) return;
+  
+    const conversations = await fetchConversations(userId);
+    if (!Array.isArray(conversations)) return;
+
+    renderDataList('conversations', conversations);
+  })();
+
+  // ========= API Call voor conversaties =========
+  async function fetchConversations(userId) {
     try {
       const res = await fetch(`https://api.projectnocode.be/api:aZtvruQz/messages/get_conversations?user=${userId}`);
-      const data = await res.json();
-  
-      if (!Array.isArray(data)) {
-        console.error('❌ Verwachte een array maar kreeg iets anders:', data);
-        return;
-      }
-  
-      const listContainer = inbox.querySelector('[data-conversations="list"]');
-      const template = listContainer?.querySelector('[data="template"]');
-      if (!listContainer || !template) {
-        console.error('❌ Listcontainer of template ontbreekt binnen [inbox]');
-        return;
-      }
-  
-      listContainer.innerHTML = '';
-      const urlParams = new URLSearchParams(window.location.search);
-      const selectedId = urlParams.get("id");
-  
-      const formatTime = (timestamp) => {
-        const now = new Date();
-        const date = new Date(timestamp);
-        const diffMs = now - date;
-        const diffMin = Math.ceil(diffMs / 60000);
-        const diffHrs = Math.ceil(diffMs / 3600000);
-  
-        if (diffMin < 60) return `${diffMin} min ago`;
-        if (diffHrs < 24) return `${diffHrs} hours ago`;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      };
-  
-      data.forEach((item, index) => {
-        const clone = template.cloneNode(true);
-        clone.removeAttribute('data');
-        clone.setAttribute('id', item.id);
-  
-        if (item.id === selectedId) {
-          clone.classList.add('active');
-        } else if (!selectedId && index === 0) {
-          clone.classList.add('active');
-          const newUrl = new URL(window.location.href);
-          newUrl.searchParams.set('id', item.id);
-          window.history.replaceState({}, '', newUrl);
-        }
-  
-        clone.querySelectorAll('[data]').forEach(el => {
-          const key = el.getAttribute('data');
-          const format = el.getAttribute('format');
-          if (!key || !format || !(key in item)) return;
-  
-          switch (format) {
-            case 'text':
-              el.textContent = item[key];
-              break;
-            case 'background':
-              el.style.backgroundImage = `url('${item[key]}')`;
-              break;
-            case 'time':
-              el.textContent = formatTime(item[key]);
-              break;
-          }
-        });
-  
-        listContainer.appendChild(clone);
-      });
-    } catch (err) {
-      console.error('❌ Fout bij ophalen conversaties:', err);
+      return await res.json();
+    } catch {
+      return null;
     }
-  })();
+  }
+  
+  // ========= Tijd formattering =========
+  function formatTime(timestamp) {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diff = now - date;
+    const min = Math.ceil(diff / 60000);
+    const hrs = Math.ceil(diff / 3600000);
+  
+    if (min < 60) return `${min} min ago`;
+    if (hrs < 24) return `${hrs} hours ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  
+  // ========= Render algemene lijst op basis van type =========
+  function renderDataList(type, items) {
+    const wrapperSelector = typeToWrapper[type];
+    if (!wrapperSelector) return;
+  
+    const wrapper = document.querySelector(wrapperSelector);
+    if (!wrapper) return;
+  
+    const list = wrapper.querySelector(`[data-${type}="list"]`);
+    const template = list?.querySelector('[data="template"]');
+    if (!list || !template) return;
+  
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedId = urlParams.get("id");
+  
+    list.innerHTML = '';
+  
+    items.forEach((item, index) => {
+      const isActive = item.id === selectedId || (!selectedId && index === 0);
+      const node = buildItemFromTemplate(item, template, isActive);
+  
+      if (!selectedId && index === 0) {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('id', item.id);
+        window.history.replaceState({}, '', newUrl);
+      }
+  
+      list.appendChild(node);
+    });
+  }
+
+  // ========= Template kopiëren en invullen =========
+  function buildItemFromTemplate(item, template, isActive) {
+    const clone = template.cloneNode(true);
+    clone.removeAttribute('data');
+    clone.setAttribute('id', item.id);
+    if (isActive) clone.classList.add('active');
+
+    clone.querySelectorAll('[data]').forEach(el => {
+      const key = el.getAttribute('data');
+      const format = el.getAttribute('format');
+      if (!key || !format || !(key in item)) return;
+
+      switch (format) {
+        case 'text':
+          el.textContent = item[key];
+          break;
+        case 'background':
+          el.style.backgroundImage = `url('${item[key]}')`;
+          break;
+        case 'time':
+          el.textContent = formatTime(item[key]);
+          break;
+      }
+    });
+
+    return clone;
+  }
