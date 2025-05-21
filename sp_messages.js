@@ -29,11 +29,14 @@ function applyDisableScrollAttribute() {
     }
   });
   
-  // ========== Haal conversaties op via API ==========
-  (async () => {
+ // ========== Haal conversaties op via API ==========
+(async () => {
     const userId = JSON.parse(localStorage.getItem('_ms-mem'))?.id;
     if (!userId) return console.error('❌ Geen user-id gevonden in localStorage (_ms-mem)');
   
+    const inbox = document.querySelector('[inbox]');
+    if (!inbox) return console.error('❌ Element met attribuut [inbox] niet gevonden');
+
     try {
       const res = await fetch(`https://api.projectnocode.be/api:aZtvruQz/messages/get_conversations?user=${userId}`);
       const data = await res.json();
@@ -43,10 +46,10 @@ function applyDisableScrollAttribute() {
         return;
       }
   
-      const listContainer = document.querySelector('[data-conversations="list"]');
+      const listContainer = inbox.querySelector('[data-conversations="list"]');
       const template = listContainer?.querySelector('[data="template"]');
       if (!listContainer || !template) {
-        console.error('❌ Listcontainer of template ontbreekt in de DOM');
+        console.error('❌ Listcontainer of template ontbreekt binnen [inbox]');
         return;
       }
   
